@@ -1,0 +1,222 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+      "Env": {
+        "Type": "String",
+        "Default": "dev",
+        "AllowedValues": [
+          "dev",
+          "stage",
+          "prod"
+        ]
+      },
+      "SlackChannel": {
+        "Type": "String",
+        "Default": "String",
+        "AllowedValues": [
+            "SlackChannel"
+        ]
+      },
+      "SlackFileUploadUrl": {
+        "Type": "String",
+        "Default": "https://slack.com/api/files.upload"
+      },
+      "SlackToken": {
+        "Type": "String",
+        "Default": "Bearer Token"
+      },
+      "SlackComment": {
+        "Type": "String",
+        "Default": "@here Error Prod Logs "
+      },
+      "LogGroupName": {
+        "Type": "String",
+        "Default": "Log Group Name"
+      },
+      "ErrorLogsImage": {
+        "Type": "String",
+        "Default": "Log Image"
+      }
+    },
+  "Resources": {
+    "DailyErrorLogsLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                  "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "DailyErrorLogsLambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeLogStreams",
+                    "logs:GetLogEvents",
+                    "logs:FilterLogEvents"
+                  ],
+                    "Resource": "*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "lambda:InvokeFunction"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "iam:ListRolePolicies",
+                        "iam:GetRole",
+                        "iam:GetRolePolicy"
+                    ],
+                    "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "DailyErrorLogsLambdaRole",
+              {
+                "Ref": "Env"
+              }
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Project Name"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Env"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": "Avish"
+          }
+        ]
+      }
+    },
+    "DailyErrorLogsLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Join": [
+            "-",
+            [
+              "DailyErrorLogsLambda",
+              {
+                "Ref": "Env"
+              }
+            ]
+          ]
+        },
+        "Description": "Daily Error Logs Lambda",
+        "PackageType": "Image",
+        "Role": {
+          "Fn::GetAtt": [
+            "DailyErrorLogsLambdaRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ImageUri": {
+            "Fn::Join": [
+              ":",
+              [
+                {
+                  "Ref": "ErrorLogsImage"
+                }
+              ]
+            ]
+          }
+        },
+        "Timeout": 900,
+        "MemorySize": 1024,
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Project Name"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Env"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": "Avish"
+          }
+        ],
+        "Environment": {
+          "Variables": {
+            "ENV": {
+              "Ref": "Env"
+            },
+            "SLACK_CHANNEL": {
+              "Ref": "SlackChannel"
+            },
+            "SLACK_FILE_UPLOAD_URL": {
+              "Ref": "SlackFileUploadUrl"
+            },
+            "SLACK_TOKEN": {
+              "Ref": "SlackToken"
+            },
+            "SLACK_COMMENT": {
+              "Ref": "SlackComment"
+            },
+            "LOG_GROUP_NAME": {
+              "Ref": "LogGroupName"
+            }
+          }
+        }
+      }
+    },
+    "DailyLogsLambdaRule": {
+        "Type": "AWS::Events::Rule",
+        "Properties": {
+            "Description": "Daily Logs Lambda Rule",
+            "ScheduleExpression": "cron(0 10 * * ? *)",
+            "State": "ENABLED",
+            "Targets": [
+            {
+                "Arn": {
+                "Fn::GetAtt": [
+                    "DailyErrorLogsLambda",
+                    "Arn"
+                ]
+                },
+                "Id": "DailyErrorLogsLambda"
+            }
+            ]
+        }
+    }
+  }
+}
